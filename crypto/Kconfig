@@ -1,0 +1,21 @@
+menuconfig CRYPTO_GOST
+	bool "GOST cryptography"
+	---help---
+    GOST 28147-89 cipher and GOST R 34.11-94 hash support.
+
+if CRYPTO_GOST
+
+config CRYPTO_GOST_CRYPT
+	tristate "GOST 28147-89 cipher algorithm"
+	select CRYPTO_ALGAPI
+	---help---
+    GOST 28147-89 cipher algorithm.
+
+config CRYPTO_GOST_HASH
+	tristate "GOST R 34.11-94 hash function"
+	select CRYPTO_HASH
+	select CRYPTO_GOST_CRYPT
+	---help---
+    GOST R 34.11-94 hash function.
+
+endif # CRYPTO_GOST

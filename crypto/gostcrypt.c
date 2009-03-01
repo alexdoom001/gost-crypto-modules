@@ -235,14 +235,17 @@ static gost_subst_block_t subst_blocks[GOST_SBT_NUMBLOCKS] = {
 	 */
 };
 
+/* Packed GOST S-Boxes */
+static gost_sbox_t sbox[GOST_SBT_NUMBLOCKS];
+
 /* 64 bits */
 #define GOST_BLOCK_SIZE 8
 
 /* 256 bits */
 #define GOST_KEY_SIZE	32
 
-/* Initialization of gost_ctx subst blocks */
-void gost_subst_block_init(gost_ctx_t *c, enum gost_subst_block_type btype)
+/* Initialization of GOST S-Boxes */
+void gost_sbox_init(gost_sbox_t *sb, enum gost_subst_block_type btype)
 {
 	int i;
 	register u32 x;
@@ -253,16 +256,23 @@ void gost_subst_block_init(gost_ctx_t *c, enum gost_subst_block_type btype)
 
 	for (i = 0; i < 256; ++i) {
 		x = (b->k8[i>>4] <<4 | b->k7 [i &15])<<24;
-		c->k87[i] = (x<<11 | x >> (32-11));
+		sb->k87[i] = (x<<11 | x >> (32-11));
 		x = (b->k6[i>>4] << 4 | b->k5 [i &15])<<16;
-		c->k65[i] = (x<<11 | x>>(32-11));
+		sb->k65[i] = (x<<11 | x>>(32-11));
 		x = (b->k4[i>>4] <<4 | b->k3 [i &15])<<8;
-		c->k43[i] = (x<<11 | x>>(32-11));
+		sb->k43[i] = (x<<11 | x>>(32-11));
 		x = b->k2[i>>4] <<4 | b->k1 [i &15];
-		c->k21[i] = (x <<11 | x>> (32-11));
+		sb->k21[i] = (x <<11 | x>> (32-11));
 	}
 }
-EXPORT_SYMBOL(gost_subst_block_init);
+
+static void __init gost_sbox_set_init(void)
+{
+	enum gost_subst_block_type btype;
+
+	for (btype = GOST_SBT_FIRST; btype < GOST_SBT_LAST; ++btype)
+		gost_sbox_init(sbox + btype, btype);
+}
 
 /* Set 256 bit  key into context */
 static void gost_key(gost_ctx_t *c, const u8 *key)
@@ -299,7 +309,7 @@ static int gost_set_key(struct crypto_tfm *tfm, const u8 *key, unsigned int key_
 	}
 
 	BUG_ON(gost_paramset_id < 0);
-	gost_subst_block_init(c, gost_paramset_id);
+	c->sbox = gost_get_sbox(gost_paramset_id);
 	gost_key(c, key);
 	return 0;
 }
@@ -307,6 +317,7 @@ static int gost_set_key(struct crypto_tfm *tfm, const u8 *key, unsigned int key_
 /* Part of GOST 28147 algorithm moved into separate function */
 static inline u32 f(const gost_ctx_t *c, u32 x)
 {
+	gost_sbox_t *sbox = c->sbox;
 /*
  * This should be in some arch-specific module in theory, but since it's the only
  * architecture we really care about let it be here for now
@@ -324,12 +335,13 @@ static inline u32 f(const gost_ctx_t *c, u32 x)
 		"orl 1024(%2, %%r9, 4), %%ecx;"
 		"orl (%2, %%rbx, 4), %%ecx;"
 		: "=c" (h)
-		: "a" (x), "S" (c->k87)
+		: "a" (x), "S" (sbox->k87)
 		: "rbx", "rdx", "r8", "r9"
 		);
 	return h;
 #else /* !defined(__amd64__) */
-	return c->k87[x>>24 & 255] | c->k65[x>>16 & 255] | c->k43[x>>8 & 255] | c->k21[x & 255];
+	return sbox->k87[x>>24 & 255] | sbox->k65[x>>16 & 255] |
+	       sbox->k43[x>>8  & 255] | sbox->k21[x     & 255];
 #endif
 }
 
@@ -450,6 +462,15 @@ gost_subst_block_t *gost_get_subst_block(enum gost_subst_block_type type)
 }
 EXPORT_SYMBOL(gost_get_subst_block);
 
+gost_sbox_t *gost_get_sbox(enum gost_subst_block_type type)
+{
+	if ((type < GOST_SBT_FIRST) || (type > GOST_SBT_LAST))
+		return NULL;
+
+	return &sbox[type];
+}
+EXPORT_SYMBOL(gost_get_sbox);
+
 /**
  * gost_select_subst_block - Select substitution block ID for gost or gosthash.
  * @default_type:     Identifier of substitution block type that will be used by default.
@@ -521,6 +542,8 @@ int gost_select_subst_block(enum gost_subst_block_type default_type,
 			       " The block must be a valid hex string\n");
 			return -EINVAL;
 		}
+
+		gost_sbox_init(sbox + custom_type, custom_type);
 
 		*out_type = custom_type;
 	}
@@ -752,6 +775,8 @@ static int __init gost_mod_init(void)
 				      &gost_paramset_id);
 	if (ret)
 		return ret;
+
+	gost_sbox_set_init();
 
 	ret = crypto_register_alg(&gost_alg);
 	if (ret) {

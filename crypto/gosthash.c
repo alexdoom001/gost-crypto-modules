@@ -200,12 +200,9 @@ static int gost_hash_init(struct shash_desc *desc, int format)
 {
 	gost_hash_ctx_t *ctx = shash_desc_ctx(desc);
 	memset(ctx, 0, sizeof(*ctx));
-	ctx->cipher_ctx = (gost_ctx_t *)kmalloc(sizeof(gost_ctx_t), GFP_ATOMIC);
-	if (!ctx->cipher_ctx)
-		return -ENOMEM;
 
 	BUG_ON(gosthash_paramset_id < 0);
-	gost_subst_block_init(ctx->cipher_ctx, gosthash_paramset_id);
+	ctx->cipher_ctx.sbox = gost_get_sbox(gosthash_paramset_id);
 	memset(&(ctx->H), 0, 32);
 	memset(&(ctx->S), 0, 32);
 	ctx->len = 0L;
@@ -230,12 +227,6 @@ static int gost_hash_update(struct shash_desc *desc, const u8 *block, unsigned i
 	const u8 *curptr = block;
 	size_t length = (size_t) uilen;
 	const u8 *barrier = block + (length - 32); /* Last byte we can safely hash*/
-	gost_ctx_t *save_c = ctx->cipher_ctx;
-
-	if (!ctx->cipher_ctx) {
-		printk("%s() ctx->cipher_ctx == NULL\n", __FUNCTION__);
-		return -EINVAL;
-	}
 
 	if (ctx->left) {
 		/*There are some bytes from previous step*/
@@ -246,41 +237,25 @@ static int gost_hash_update(struct shash_desc *desc, const u8 *block, unsigned i
 		memcpy(&(ctx->remainder[ctx->left]),block,add_bytes);
 		ctx->left+=add_bytes;
 		if (ctx->left < 32) {
-			printk("%s() ctx->left < 32\n", __FUNCTION__);
+			pr_debug("%s() ctx->left < 32\n", __FUNCTION__);
 			return 0;
 		}
 		curptr=block+add_bytes;
-		hash_step(ctx->cipher_ctx,ctx->H,ctx->remainder);
-		if (save_c != ctx->cipher_ctx) {
-			printk("%s() save_c != ctx->cipher_ctx\n", __FUNCTION__);
-			return -EINVAL;
-		}
+		hash_step(&ctx->cipher_ctx, ctx->H, ctx->remainder);
 		add_blocks(32,ctx->S,ctx->remainder);
-		if (save_c != ctx->cipher_ctx) {
-			printk("%s() save_c != ctx->cipher_ctx\n", __FUNCTION__);
-			return -EINVAL;
-		}
 		ctx->len += 32;
 		ctx->left = 0;
 	}
 	while (curptr <= barrier) {
-		hash_step(ctx->cipher_ctx,ctx->H,curptr);
-		if (save_c != ctx->cipher_ctx) {
-			printk("%s() save_c != ctx->cipher_ctx\n", __FUNCTION__);
-			return -EINVAL;
-		}
+		hash_step(&ctx->cipher_ctx, ctx->H, curptr);
 		add_blocks(32,ctx->S,curptr);
-		if (save_c != ctx->cipher_ctx) {
-			printk("%s() save_c != ctx->cipher_ctx\n", __FUNCTION__);
-			return -EINVAL;
-		}
 		ctx->len += 32;
 		curptr += 32;
 	}
 	if (curptr != block + length) {
 		ctx->left = block + length - curptr;
 		if (ctx->left > 32) {
-			printk("%s() ctx->left > 32\n", __FUNCTION__);
+			pr_debug("%s() ctx->left > 32\n", __FUNCTION__);
 			return -EINVAL;
 		}
 		memcpy(ctx->remainder,curptr,ctx->left);
@@ -308,17 +283,12 @@ static int gost_hash_final(struct shash_desc *desc, u8 *hashval)
 	unsigned long long fin_len = ctx->len;
 	u8 *bptr;
 
-	if (!ctx->cipher_ctx) {
-		printk("%s() ctx->cipher_ctx == NULL\n", __FUNCTION__);
-		return -EINVAL;
-	}
-
 	memcpy(H,ctx->H,32);
 	memcpy(S,ctx->S,32);
 	if (ctx->left) {
 		memset(buf,0,32);
 		memcpy(buf,ctx->remainder,ctx->left);
-		hash_step(ctx->cipher_ctx,H,buf);
+		hash_step(&ctx->cipher_ctx, H, buf);
 		add_blocks(32,S,buf);
 		fin_len+=ctx->left;
 	}
@@ -329,16 +299,13 @@ static int gost_hash_final(struct shash_desc *desc, u8 *hashval)
 		*(bptr++) = (u8)(fin_len&0xFF);
 		fin_len>>=8;
 	}
-	hash_step(ctx->cipher_ctx,H,buf);
-	hash_step(ctx->cipher_ctx,H,S);
+	hash_step(&ctx->cipher_ctx, H, buf);
+	hash_step(&ctx->cipher_ctx, H, S);
 
 	if (ctx->format == GOSTHASH_BE)
 		rev_memcpy (hashval, H, 32);
 	else
 		memcpy (hashval, H, 32);
-
-	kfree(ctx->cipher_ctx);
-	ctx->cipher_ctx = NULL;
 
 	return 0;
 }
@@ -349,11 +316,6 @@ static int gost_hash_export(struct shash_desc *desc, void *out)
 	gost_hash_ctx_t *exp = (gost_hash_ctx_t *) out;
 
 	memcpy(exp, ctx, sizeof(gost_hash_ctx_t));
-	exp->cipher_ctx = (gost_ctx_t *)kmalloc(sizeof(gost_ctx_t), GFP_ATOMIC);
-        if (!exp->cipher_ctx)
-                return -ENOMEM;
-
-	memcpy(exp->cipher_ctx, ctx->cipher_ctx, sizeof(gost_ctx_t));
 
 	return 0;
 }
@@ -363,11 +325,6 @@ static int gost_hash_import(struct shash_desc *desc, const void *in)
 	gost_hash_ctx_t *ctx = shash_desc_ctx(desc);
 
 	memcpy(ctx, in, sizeof(gost_hash_ctx_t));
-	ctx->cipher_ctx = (gost_ctx_t *)kmalloc(sizeof(gost_ctx_t), GFP_ATOMIC);
-	if (!ctx->cipher_ctx)
-		return -ENOMEM;
-
-	memcpy(ctx->cipher_ctx, ((gost_hash_ctx_t *) in)->cipher_ctx, sizeof(gost_ctx_t));
 
 	return 0;
 }

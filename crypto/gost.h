@@ -15,16 +15,20 @@ typedef struct {
 
 #define GOST_SUBST_BLOCK_SIZE 128
 
+/* Packed representation of GOST S-Boxes */
+typedef struct {
+	u32 k87[256], k65[256], k43[256], k21[256];
+} gost_sbox_t;
+
 /* Cipher context includes key and preprocessed substitution block */
 typedef struct {
 	u32 k[8];
-	/* Constant s-boxes */
-	u32 k87[256],k65[256],k43[256],k21[256];
+	gost_sbox_t *sbox;
 } gost_ctx_t;
 
 typedef struct {
 	unsigned long long len;
-	gost_ctx_t *cipher_ctx;
+	gost_ctx_t cipher_ctx;
 	int left;
 	u8 H[32];
 	u8 S[32];
@@ -60,10 +64,10 @@ enum gost_subst_block_type {
 #define GOSTCRYPT_DEFAULT_SBT_ID Gost28147_CryptoProParamSetA
 #define GOSTHASH_DEFAULT_SBT_ID  GostR3411_94_CryptoProParamSet
 
-void gost_subst_block_init_raw(gost_ctx_t *c, gost_subst_block_t *b);
 void gost_subst_block_init(gost_ctx_t *c, enum gost_subst_block_type btype);
 void gost_enc_with_key(gost_ctx_t *c, u8 *key, u8 *inblock, u8 *outblock);
 gost_subst_block_t *gost_get_subst_block(enum gost_subst_block_type type);
+gost_sbox_t *gost_get_sbox(enum gost_subst_block_type type);
 int gost_select_subst_block(enum gost_subst_block_type default_type,
 			    enum gost_subst_block_type custom_type,
 			    const char *subst_block,

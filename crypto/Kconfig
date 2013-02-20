@@ -11,12 +11,18 @@ config CRYPTO_GOST_CRYPT
 	---help---
     GOST 28147-89 cipher algorithm.
 
-config CRYPTO_GOST_HASH
+config CRYPTO_GOST_HASH94
 	tristate "GOST R 34.11-94 hash function"
 	select CRYPTO_HASH
 	select CRYPTO_GOST_CRYPT
 	---help---
     GOST R 34.11-94 hash function.
+
+config CRYPTO_GOST_HASH2012
+	tristate "GOST R 34.11-2012 hash function"
+	select CRYPTO_HASH
+	---help---
+    GOST R 34.11-2012 hash function (aka Stribog).
 
 config CRYPTO_GOST_DEBUGFS
 	bool "Enable GOST debugfs support"

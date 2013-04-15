@@ -1,0 +1,32 @@
+gost-crypto (0.22) unstable; urgency=low
+
+  * debian/control: correct gost-crypto-source package dependencies
+  * debian/rules: use CURDIR instead of PWD
+  * debian/control: correct description format
+  * debian/rules: fix file permissions
+  * debian/control: update Standards-Version to current version
+  * debian/copyright: fix indentation
+  * debian/rules: install copyright and changelog files
+
+ -- John Smith <johnsmith@yahoo.com   Mon, 15 Apr 2013 13:17:28 -0500
+
+gost-crypto (0.21) unstable; urgency=low
+
+  * crypto: add GOST 28147-89 block cipher, and GOST 34.11-94 hash
+  * crypto: fix gost hash
+  * crypto: Fixed gosthash issues
+  * crypto: added posibility to change gost substitution blocks
+  * crypto: add tests for gost and gosthash
+  * crypto/gostcrypt: gost_paramset_id may be 0, fix artf1572
+  * crypto/gosthash: add support of S-Terra GOST hash
+  * crypto/gostcrypt: optimized memory transfer
+  * crypto/gostcrypt: amd64 optimized round
+  * crypto/gosthash: fix printk calls, specify message level
+  * crypto/gost: move S-Box body away from context
+  * crypto/gost: move gostcrypt context body into gosthash context
+  * crypto: add GOST R 34.11-2012 hash support
+  * crypto: add SSE2-optimized GOST 34.11-2012 function
+  * crypto: rename gost3411-2012-XXX to gosthash12-XXX
+  * debian: add Debian control files
+
+ -- John Smith <johnsmith@yahoo.com>  Fri, 12 Apr 2013 18:16:19 -0500

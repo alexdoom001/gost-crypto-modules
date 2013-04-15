@@ -1,0 +1,24 @@
+Source: gost-crypto
+Section: kernel
+Priority: optional
+Maintainer: John Smith <johnsmith@yahoo.com>
+Build-Depends: debhelper (>= 7)
+Standards-Version: 3.8.1
+
+Package: gost-crypto-modules-_KVERS_
+Architecture: any
+Provides: gost-crypto-modules
+Description: GOST crypto modules for Linux (kernel _KVERS_).
+ This package contains the set of loadable kernel modules that
+ adds support for
+ .
+ * GOST 28147-89 block cipher,
+ * GOST R 34.11-94 hash function, and
+ * GOST R 34.11-2012 hash function (akaStribog).
+ .
+ This package contains the compiled kernel modules for _KVERS_.
+ .
+ If you have compiled your own kernel, you will most likely need to build
+ your own gost-crypto-modules. The gost-crypto-source package has been
+ provided for use with the Debian's module-assistant or kernel-package
+ utilities to produce a version of gost-crypto-modules for your kernel.

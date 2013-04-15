@@ -744,3 +744,6 @@ EXPORT_SYMBOL(gost_debugfs_gosthash_init);
 EXPORT_SYMBOL(gost_debugfs_gosthash_fini);
 EXPORT_SYMBOL(gost_debugfs_gostcrypt_init);
 EXPORT_SYMBOL(gost_debugfs_gostcrypt_fini);
+
+MODULE_LICENSE("GPL");
+MODULE_DESCRIPTION("gostcrypt and gosthash debugfs interface");

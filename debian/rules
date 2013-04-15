@@ -1,0 +1,106 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+BASE_SOURCES    = Kconfig Makefile gost.h gostcrypt.c gosthash.c
+STRIBOG_SOURCES = stribog.h stribog.c stribog_const.c stribog_sse.c
+SOURCES         = $(BASE_SOURCES) gost_debugfs.c $(STRIBOG_SOURCES)
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+PACKAGE = gost-crypto-modules
+psource := gost-crypto-source
+sname := gost-crypto
+MA_DIR ?= /usr/share/modass
+-include $(MA_DIR)/include/generic.make
+-include $(MA_DIR)/include/common-rules.make
+
+kdist_config: prep-deb-files
+kdist_clean: dist_clean
+
+configure:
+
+build-arch:  configure
+build-indep: configure
+
+build: build-arch
+
+# the binary-modules rule is invoked by module-assistant while processing the
+# kdist* targets. It is called by module-assistant or make-kpkg and *not*
+# during a normal build
+binary-modules:
+	dh_testroot
+	dh_prep
+	dh_installdirs lib/modules/$(KVERS)/gost-crypto
+
+	# Build the module
+	$(MAKE) -C $(KSRC) M=$(CURDIR)/crypto \
+		CONFIG_CRYPTO_GOST_CRYPT=m \
+		CONFIG_CRYPTO_GOST_HASH94=m \
+		CONFIG_CRYPTO_GOST_HASH2012=m \
+		CONFIG_CRYPTO_GOST_DEBUGFS=m
+
+	# Install the module
+	cp crypto/*.ko debian/$(PKGNAME)/lib/modules/$(KVERS)/gost-crypto
+
+	dh_installdocs
+	dh_installmodules
+	dh_installchangelogs
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb --destdir=$(DEB_DESTDIR)
+	dh_prep
+
+clean:
+	dh_testdir
+	dh_clean
+
+dist_clean: clean
+	$(MAKE) -C $(KSRC) M=$(CURDIR)/crypto clean
+
+install: DH_OPTIONS=
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep
+	dh_installdirs
+	dh_installdocs
+	dh_installchangelogs
+
+	# Create the directories to install the source into
+	dh_installdirs -p$(psource)  usr/src/modules/$(sname)/debian
+	dh_installdirs -p$(psource)  usr/src/modules/$(sname)/crypto
+	dh_installdirs -p$(psource)  usr/src/modules/$(sname)/doc
+
+	# Copy only the driver source to the proper location
+	for i in $(SOURCES); do \
+		cp crypto/$$i debian/$(psource)/usr/src/modules/$(sname)/crypto; \
+	done
+	cp doc/gost.txt debian/$(psource)/usr/src/modules/$(sname)/doc
+	# Copy the needed debian/ pieces to the proper location
+	cp debian/control* \
+		debian/$(psource)/usr/src/modules/$(sname)/debian
+	cp debian/rules debian/changelog debian/copyright \
+		debian/compat debian/$(psource)/usr/src/modules/$(sname)/debian/
+	cd debian/$(psource)/usr/src && \
+		tar c modules | bzip2 -9 > $(sname).tar.bz2 && \
+		chmod 0644 $(sname).tar.bz2 && \
+		rm -rf modules
+
+#	$(MAKE) DESTDIR=$(CURDIR)/debian/$(psource) install
+
+	dh_install
+
+binary-arch:  build-arch  install
+binary-indep: build-indep install
+	dh_compress -i
+	dh_installdeb -i
+	dh_gencontrol -i -- -p$(psource)
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary: binary-arch binary-indep
+.PHONY: build clean binary-indep binary-arch binary install configure binary-modules kdist kdist_configure kdist_image kdist_clean

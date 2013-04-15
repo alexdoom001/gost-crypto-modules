@@ -1,0 +1,22 @@
+Source: gost-crypto
+Section: kernel
+Priority: extra
+Maintainer: John Smith <johnsmith@yahoo.com>
+Build-Depends: debhelper (>= 7), bzip2
+Standards-Version: 3.9.4
+
+Package: gost-crypto-source
+Section: kernel
+Architecture: all
+Depends: module-assistant, debhelper (>= 5), bzip2, module-init-tools, ${misc:Depends}
+Suggests: kernel-package
+Description: GOST cipher and hash function crypto modules
+ This package includes source for the kernel crypto modules that
+ adds support for
+ .
+   * GOST 28147-89 block cipher,
+   * GOST R 34.11-94 hash function, and
+   * GOST R 34.11-2012 hash function (akaStribog).
+ .
+ In order to compile these modules, you will need either the kernel
+ sources or the Debian kernel-headers and kernel-image packages.

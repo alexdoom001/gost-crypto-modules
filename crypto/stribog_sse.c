@@ -1,4 +1,10 @@
+#include <linux/version.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,1,0)
+#include <asm/fpu/api.h>
+#else
 #include <asm/i387.h>
+#endif
 
 #define load_xmm_macro(DST_XMM_0, DST_XMM_1, DST_XMM_2, DST_XMM_3) \
 	asm ( \

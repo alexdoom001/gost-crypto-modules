@@ -11,6 +11,10 @@ config CRYPTO_GOST_CRYPT
 	---help---
     GOST 28147-89 cipher algorithm.
 
+config CRYPTO_GOST_2015_CRYPT
+	tristate "GOST R 34.12-2015 Kuznyechik cipher algorithm"
+	select CRYPTO_ALGAPI
+
 config CRYPTO_GOST_HASH94
 	tristate "GOST R 34.11-94 hash function"
 	select CRYPTO_HASH

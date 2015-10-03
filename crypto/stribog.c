@@ -55,7 +55,7 @@ static void add64to512num(uint64_t a, void *b)
 	}
 }
 
-#if defined(__x86_64) || defined(__x86_64__) || defined(_M_AMD64) || defined(_M_X64)
+#if defined(__SSE__) && defined(__x86_64__)
 #include "stribog_sse.c"
 #else
 

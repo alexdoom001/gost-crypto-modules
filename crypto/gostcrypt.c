@@ -35,6 +35,7 @@
  * ---------------------------------------------------------------------------
  */
 
+#include <linux/bitops.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/init.h>
@@ -244,25 +245,28 @@ static gost_sbox_t sbox[GOST_SBT_NUMBLOCKS];
 /* 256 bits */
 #define GOST_KEY_SIZE	32
 
-/* Initialization of GOST S-Boxes */
+/*
+ * Initialization of GOST S-Boxes
+ *
+ * NOTE: use GCC >= 4.9 for Linux >= 4.4 on x86 otherwise rol32 will not be
+ *       converted into single roll instruction
+ */
 void gost_sbox_init(gost_sbox_t *sb, enum gost_subst_block_type btype)
 {
-	int i;
-	register u32 x;
+	int i, h, l;
 	gost_subst_block_t *b;
 
 	b = gost_get_subst_block(btype);
 	BUG_ON(b == NULL);
 
 	for (i = 0; i < 256; ++i) {
-		x = (b->k8[i>>4] <<4 | b->k7 [i &15])<<24;
-		sb->k87[i] = (x<<11 | x >> (32-11));
-		x = (b->k6[i>>4] << 4 | b->k5 [i &15])<<16;
-		sb->k65[i] = (x<<11 | x>>(32-11));
-		x = (b->k4[i>>4] <<4 | b->k3 [i &15])<<8;
-		sb->k43[i] = (x<<11 | x>>(32-11));
-		x = b->k2[i>>4] <<4 | b->k1 [i &15];
-		sb->k21[i] = (x <<11 | x>> (32-11));
+		h = i / 16;
+		l = i % 16;
+
+		sb->k87[i] = rol32((b->k8[h] << 4 | b->k7 [l]) << 24, 11);
+		sb->k65[i] = rol32((b->k6[h] << 4 | b->k5 [l]) << 16, 11);
+		sb->k43[i] = rol32((b->k4[h] << 4 | b->k3 [l]) << 8,  11);
+		sb->k21[i] = rol32((b->k2[h] << 4 | b->k1 [l]),       11);
 	}
 }
 
@@ -345,33 +349,30 @@ static inline u32 f(const gost_ctx_t *c, u32 x)
 #endif
 }
 
+/* Instead of swapping halves, swap names each round */
+#define direct_rounds(c, n1, n2) \
+	n2 ^= f(c, n1 + c->k[0]); n1 ^= f(c, n2 + c->k[1]); \
+	n2 ^= f(c, n1 + c->k[2]); n1 ^= f(c, n2 + c->k[3]); \
+	n2 ^= f(c, n1 + c->k[4]); n1 ^= f(c, n2 + c->k[5]); \
+	n2 ^= f(c, n1 + c->k[6]); n1 ^= f(c, n2 + c->k[7]);
+
+#define reverse_rounds(c, n1, n2) \
+	n2 ^= f(c, n1 + c->k[7]); n1 ^= f(c, n2 + c->k[6]); \
+	n2 ^= f(c, n1 + c->k[5]); n1 ^= f(c, n2 + c->k[4]); \
+	n2 ^= f(c, n1 + c->k[3]); n1 ^= f(c, n2 + c->k[2]); \
+	n2 ^= f(c, n1 + c->k[1]); n1 ^= f(c, n2 + c->k[0]);
+
 static void gostcrypt(const gost_ctx_t *c, const u8 *in, u8 *out)
 {
 	register u32 n1, n2; /* As named in the GOST */
 
 	n1 = le32_to_cpu(*(u32*) in);
 	n2 = le32_to_cpu(*(u32*) (in + 4));
-	/* Instead of swapping halves, swap names each round */
 
-	n2 ^= f(c,n1+c->k[0]); n1 ^= f(c,n2+c->k[1]);
-	n2 ^= f(c,n1+c->k[2]); n1 ^= f(c,n2+c->k[3]);
-	n2 ^= f(c,n1+c->k[4]); n1 ^= f(c,n2+c->k[5]);
-	n2 ^= f(c,n1+c->k[6]); n1 ^= f(c,n2+c->k[7]);
-
-	n2 ^= f(c,n1+c->k[0]); n1 ^= f(c,n2+c->k[1]);
-	n2 ^= f(c,n1+c->k[2]); n1 ^= f(c,n2+c->k[3]);
-	n2 ^= f(c,n1+c->k[4]); n1 ^= f(c,n2+c->k[5]);
-	n2 ^= f(c,n1+c->k[6]); n1 ^= f(c,n2+c->k[7]);
-
-	n2 ^= f(c,n1+c->k[0]); n1 ^= f(c,n2+c->k[1]);
-	n2 ^= f(c,n1+c->k[2]); n1 ^= f(c,n2+c->k[3]);
-	n2 ^= f(c,n1+c->k[4]); n1 ^= f(c,n2+c->k[5]);
-	n2 ^= f(c,n1+c->k[6]); n1 ^= f(c,n2+c->k[7]);
-
-	n2 ^= f(c,n1+c->k[7]); n1 ^= f(c,n2+c->k[6]);
-	n2 ^= f(c,n1+c->k[5]); n1 ^= f(c,n2+c->k[4]);
-	n2 ^= f(c,n1+c->k[3]); n1 ^= f(c,n2+c->k[2]);
-	n2 ^= f(c,n1+c->k[1]); n1 ^= f(c,n2+c->k[0]);
+	direct_rounds  (c, n1, n2);
+	direct_rounds  (c, n1, n2);
+	direct_rounds  (c, n1, n2);
+	reverse_rounds (c, n1, n2);
 
 	*((u32*)out) = cpu_to_le32(n2);
 	*((u32*)(out + 4)) = cpu_to_le32(n1);
@@ -401,25 +402,10 @@ static void gost_decrypt(struct crypto_tfm *tfm, u8 *out, const u8 *in)
 	n1 = le32_to_cpu(*(u32*) in);
 	n2 = le32_to_cpu(*(u32*) (in + 4));
 
-	n2 ^= f(c,n1+c->k[0]); n1 ^= f(c,n2+c->k[1]);
-	n2 ^= f(c,n1+c->k[2]); n1 ^= f(c,n2+c->k[3]);
-	n2 ^= f(c,n1+c->k[4]); n1 ^= f(c,n2+c->k[5]);
-	n2 ^= f(c,n1+c->k[6]); n1 ^= f(c,n2+c->k[7]);
-
-	n2 ^= f(c,n1+c->k[7]); n1 ^= f(c,n2+c->k[6]);
-	n2 ^= f(c,n1+c->k[5]); n1 ^= f(c,n2+c->k[4]);
-	n2 ^= f(c,n1+c->k[3]); n1 ^= f(c,n2+c->k[2]);
-	n2 ^= f(c,n1+c->k[1]); n1 ^= f(c,n2+c->k[0]);
-
-	n2 ^= f(c,n1+c->k[7]); n1 ^= f(c,n2+c->k[6]);
-	n2 ^= f(c,n1+c->k[5]); n1 ^= f(c,n2+c->k[4]);
-	n2 ^= f(c,n1+c->k[3]); n1 ^= f(c,n2+c->k[2]);
-	n2 ^= f(c,n1+c->k[1]); n1 ^= f(c,n2+c->k[0]);
-
-	n2 ^= f(c,n1+c->k[7]); n1 ^= f(c,n2+c->k[6]);
-	n2 ^= f(c,n1+c->k[5]); n1 ^= f(c,n2+c->k[4]);
-	n2 ^= f(c,n1+c->k[3]); n1 ^= f(c,n2+c->k[2]);
-	n2 ^= f(c,n1+c->k[1]); n1 ^= f(c,n2+c->k[0]);
+	direct_rounds  (c, n1, n2);
+	reverse_rounds (c, n1, n2);
+	reverse_rounds (c, n1, n2);
+	reverse_rounds (c, n1, n2);
 
 	*((u32*)out) = cpu_to_le32(n2);
 	*((u32*)(out + 4)) = cpu_to_le32(n1);
@@ -817,6 +803,11 @@ static void __exit gost_mod_fini(void)
 module_init(gost_mod_init);
 module_exit(gost_mod_fini);
 
+/* Linux >= 3.18 uses this macro to name autoloaded modules */
+#ifndef MODULE_ALIAS_CRYPTO
+#define MODULE_ALIAS_CRYPTO(name)	MODULE_ALIAS(name)
+#endif
+
 MODULE_DESCRIPTION("GOST Cipher Algorithm");
 MODULE_LICENSE("Dual BSD/GPL");
-MODULE_ALIAS("gost");
+MODULE_ALIAS_CRYPTO("gost");
